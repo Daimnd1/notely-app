@@ -1,7 +1,7 @@
 # source deploy/00-env.sh   (terminal on your laptop, gcloud installed and signed in)
 # Fill in YOUR values. Never commit real project IDs, passwords or keys to Git.
-export PROJECT_ID="your-project-id"
-export REPO_URL="https://github.com/YOUR-USER/notely-app.git"
+export PROJECT_ID="project-472dae6a-e39b-4e04-84a"
+export REPO_URL="https://github.com/Daimnd1/notely-app.git"
 export REGION="europe-north1"     # Finland
 export ZONE="europe-north1-a"
 export REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/notely"
