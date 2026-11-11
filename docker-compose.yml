@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - CORS_ORIGIN=http://localhost:5173
+    networks:
+      - notely-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      # Runtime config: the browser talks to the backend published on the host,
+      # so the base URL is only known at deploy time, not at build time.
+      # The image's CMD copies public/config.json into dist/ on startup.
+      - ./frontend/config.docker.json:/app/public/config.json:ro
+    depends_on:
+      - backend
+    networks:
+      - notely-network
+
+networks:
+  notely-network:
+    driver: bridge
