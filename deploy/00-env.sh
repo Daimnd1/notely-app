@@ -3,7 +3,7 @@
 export PROJECT_ID="project-472dae6a-e39b-4e04-84a"
 export REPO_URL="https://github.com/Daimnd1/notely-app.git"
 export REGION="europe-north1"     # Finland
-export ZONE="europe-north1-a"
+export ZONE="europe-north1-b"
 export REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/notely"
 gcloud config set project "${PROJECT_ID}"
 gcloud config set run/region "${REGION}"
