@@ -1,32 +1,20 @@
-# Exercise 1 — two VMs, no containers
+# Exercise 3 — the notes move to a database in Finland
 
-**What changes in the code:** nothing. This branch is the original app plus this `deploy/` folder.
-The Dockerfiles appear in the `exercise2` branch.
+**What changes in the code:** `backend/src/repository.js` gets a PostgreSQL implementation (package
+`pg`), chosen when `DB_HOST` is set; the in-memory one stays for local runs. `/health` now checks the
+database (`SELECT 1`). `docker-compose.yml` adds a local PostgreSQL so you can test on your laptop.
+The backend reads `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (and `DB_SSL`) from the environment.
 
-**How it is deployed:** two `e2-micro` VMs in `europe-north1-a`. Each VM runs a startup script
-(`deploy/startup-api.sh`, `deploy/startup-web.sh`) that installs Node.js 22, clones this repository,
-installs the dependencies and starts its part. The frontend VM writes `dist/config.json` with the
-API VM's address and serves the built page on port 80. Two firewall rules open ports 3000 and 80.
+**How it is deployed:** a Cloud SQL for PostgreSQL 16 instance in `europe-north1`, *regional* (a
+primary and a standby in two zones), backups kept in Finland. The instance is created in the
+**Enterprise** edition (`--edition=ENTERPRISE`): for PostgreSQL 16 the default is Enterprise Plus, which
+offers no shared-core machine, so `db-f1-micro` would be refused. The API connects to the instance's
+**public address**, and the instance accepts connections from any address (`0.0.0.0/0`) because a
+Cloud Run instance has no fixed address to authorize. The connection is encrypted (`DB_SSL=true`) and
+needs the password, which lives in Secret Manager and reaches the API as `DB_PASSWORD`. This is the
+simplest set-up — and a database that listens to the whole internet. Exercise 5 closes it.
 
-**Run it:** `source deploy/00-env.sh` (fill in your values first), then `bash deploy/exercise1.sh`.
-The console click-paths are in the course document, Exercise 1.
+**Run it:** `bash deploy/exercise3.sh`. Console click-paths: course document, Exercise 3.
 
-**Check it:** `curl http://API_IP:3000/health` → `"storage":"memory"`. Create a note, reset the
-API VM, reload: the note is gone (notes live in memory). That is what Exercise 3 fixes.
-
-# Exercise 2 — containers on Cloud Run
-
-**What changes in the code:** `backend/Dockerfile`, `frontend/Dockerfile`, `.dockerignore` files and
-`docker-compose.yml` (to run both containers on your laptop). The frontend image writes
-`dist/config.json` from the `API_BASE_URL` variable when the container starts.
-
-**How it is deployed:** build the two images on your laptop (Docker Desktop), push them to an
-Artifact Registry repository in `europe-north1`, and create two Cloud Run services from them.
-Cloud Run replicates a service across the zones of the region and adds instances with traffic.
-Both services run with minimum instances 1 (one copy always warm) and maximum instances 2 (the cost fuse).
-
-**Run it:** `bash deploy/exercise2.sh`. Console click-paths: course document, Exercise 2.
-
-**Check it:** open the page's `https://…run.app` URL. Notes still live in memory — and now there
-may be several instances, each with its own notes. That is the "notes appear and disappear"
-problem Exercise 3 solves.
+**Check it:** `curl https://…run.app/health` → `"storage":"postgres"`. Create a note, deploy a
+no-change revision, reload: the note is still there.

@@ -1,32 +1,39 @@
+# Run the whole app on your laptop: PostgreSQL + backend + frontend.
+#   docker compose up --build      then open http://localhost:5173
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=notely
+      - POSTGRES_PASSWORD=notely-local-only
+      - POSTGRES_DB=notely
+    # The backend creates its table at start-up, so it waits until PostgreSQL accepts connections
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notely -d notely"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
-      - CORS_ORIGIN=http://localhost:5173
-    networks:
-      - notely-network
+      - DB_HOST=db
+      - DB_USER=notely
+      - DB_PASSWORD=notely-local-only
+      - DB_NAME=notely
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    build: ./frontend
     ports:
       - "5173:5173"
-    volumes:
-      # Runtime config: the browser talks to the backend published on the host,
-      # so the base URL is only known at deploy time, not at build time.
-      # The image's CMD copies public/config.json into dist/ on startup.
-      - ./frontend/config.docker.json:/app/public/config.json:ro
+    environment:
+      - PORT=5173
+      - API_BASE_URL=http://localhost:3000
     depends_on:
       - backend
-    networks:
-      - notely-network
-
-networks:
-  notely-network:
-    driver: bridge
