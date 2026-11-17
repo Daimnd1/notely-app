@@ -28,6 +28,26 @@ export const createNote = (d)     => request('', { method: 'POST', body: JSON.st
 export const updateNote = (id, d) => request(`/${id}`, { method: 'PUT', body: JSON.stringify(d) });
 export const deleteNote = (id)    => request(`/${id}`, { method: 'DELETE' });
 
+// Exercise 4 -- "Attach file". The browser posts a multipart form to the API;
+// the API stores the PDF in Cloud Storage. Do NOT set Content-Type here: the
+// browser adds the multipart boundary itself.
+export async function uploadAttachment(id, file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${await base()}/api/notes/${id}/attachment`, { method: 'POST', body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+// The API's base address, read once from config.json ('' = same origin).
+export const apiBase = () => base();
+
+// The PDF is streamed back by the API: links point at the API, never at the bucket.
+export const attachmentHref = (apiBaseUrl, id) => `${apiBaseUrl}/api/notes/${id}/attachment`;
+
 // Who serves the static files. The VM startup script writes it into config.json;
 // on the bucket (final stage) there is no instance, just Cloud Storage itself.
 export const frontendId = async () => (await config()).frontendInstance ?? null;
