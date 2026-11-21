@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { listNotes, getNote, createNote, updateNote, deleteNote, fetchHealth, frontendId,
-         uploadAttachment, apiBase, attachmentHref } from './api.js';
+         uploadAttachment, apiBase, downloadAttachment } from './api.js';
 
 const s = {
   page:  { fontFamily: 'system-ui, sans-serif', maxWidth: 720, margin: '2rem auto', padding: '0 1rem' },
@@ -58,9 +58,12 @@ function Attachment({ base, note }) {
   return (
     <p style={s.att}>
       <strong>Attachment:</strong>{' '}
-      <a href={attachmentHref(base, note.id)} target="_blank" rel="noreferrer">
+      <button type="button" onClick={async () => {
+        try { await downloadAttachment(note.id); }
+        catch (error) { alert(error.message); }
+      }}>
         {note.attachment.name}
-      </a>{' '}
+      </button>{' '}
       <small>({kb} KB)</small>
     </p>
   );
@@ -121,6 +124,20 @@ export default function App() {
   return (
     <div style={s.page}>
       <h1>Notely</h1>
+      <details style={s.card}>
+        <summary>Demo access token</summary>
+        <form onSubmit={event => {
+          event.preventDefault();
+          const token = new FormData(event.currentTarget).get('token');
+          if (token) sessionStorage.setItem('notely-token', token);
+          else sessionStorage.removeItem('notely-token');
+          setSelected(null); setEditing(null); refresh();
+        }}>
+          <p>Enter the shared classroom token. It stays in this browser tab.</p>
+          <input name="token" type="password" aria-label="Demo access token" autoComplete="off" />
+          <button type="submit" style={s.btn}>Use token</button>
+        </form>
+      </details>
       {error && <p style={s.err}><strong>Error:</strong> {error}</p>}
 
       {editing ? (

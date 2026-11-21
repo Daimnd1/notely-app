@@ -1,3 +1,4 @@
+const authHeaders = () => { const token = sessionStorage.getItem('notely-token'); return token ? { Authorization: `Bearer ${token}` } : {}; };
 let configPromise = null;
 
 // config.json is served with no-store: every frontend VM or container can
@@ -15,7 +16,7 @@ async function base() {
 
 async function request(path, options = {}) {
   const res = await fetch(`${await base()}/api/notes${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     ...options,
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -34,7 +35,7 @@ export const deleteNote = (id)    => request(`/${id}`, { method: 'DELETE' });
 export async function uploadAttachment(id, file) {
   const form = new FormData();
   form.append('file', file);
-  const res = await fetch(`${await base()}/api/notes/${id}/attachment`, { method: 'POST', body: form });
+  const res = await fetch(`${await base()}/api/notes/${id}/attachment`, { method: 'POST', body: form, headers: authHeaders() });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `${res.status} ${res.statusText}`);
@@ -46,7 +47,13 @@ export async function uploadAttachment(id, file) {
 export const apiBase = () => base();
 
 // The PDF is streamed back by the API: links point at the API, never at the bucket.
-export const attachmentHref = (apiBaseUrl, id) => `${apiBaseUrl}/api/notes/${id}/attachment`;
+export async function downloadAttachment(id) {
+  const response = await fetch(`${await base()}/api/notes/${id}/attachment`, { headers: authHeaders() });
+  if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a'); link.href = url; link.download = `note-${id}.pdf`;
+  link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
 
 // Who serves the static files. The VM startup script writes it into config.json;
 // on the bucket (final stage) there is no instance, just Cloud Storage itself.

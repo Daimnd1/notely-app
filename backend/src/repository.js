@@ -13,6 +13,7 @@
 // "Connect from Compute Engine" -> "Connect using private IP").
 
 import pg from 'pg';
+import { Connector } from '@google-cloud/cloud-sql-connector';
 
 const now = () => new Date().toISOString();
 
@@ -95,19 +96,31 @@ async function postgresRepository() {
   // docker-compose. It is never written into the image or the repository.
   const password = process.env.DB_PASSWORD;
 
+  // Private networking provides reachability; this connector adds authenticated TLS.
+  const connector = process.env.INSTANCE_CONNECTION_NAME ? new Connector() : null;
+  const options = connector ? await connector.getOptions({
+    instanceConnectionName: process.env.INSTANCE_CONNECTION_NAME,
+    ipType: process.env.DB_IP_TYPE || 'PRIVATE',
+  }) : { host: process.env.DB_HOST, port: Number(process.env.DB_PORT || 5432) };
   const pool = new pg.Pool({
-    host:     process.env.DB_HOST,
-    port:     Number(process.env.DB_PORT || 5432),
+    ...options,
+    connectionTimeoutMillis: 10000,
     user:     process.env.DB_USER || 'notely',
     password,
     database: process.env.DB_NAME || 'notely',
     max: 5,
-    // Cloud SQL private IP traffic stays inside the VPC. To enforce TLS as well,
-    // set DB_SSL=true (and require SSL on the instance with --ssl-mode).
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+    // Connector handles cloud TLS. Do not disable certificate validation.
+
   });
 
-  await pool.query(SCHEMA);
+  // Direct VPC connectivity can take time to become ready on a new instance.
+  let lastError;
+  for (let attempt = 0; attempt < 18; attempt++) {
+    try { await pool.query(SCHEMA); lastError = null; break; }
+    catch (error) { lastError = error; await new Promise(resolve => setTimeout(resolve, 5000)); }
+  }
+  if (lastError) throw lastError;
+  pool.on('error', error => console.error('Idle database connection:', error.message));
 
   return {
     kind: 'postgres',
@@ -150,5 +163,5 @@ async function postgresRepository() {
 }
 
 export async function createRepository() {
-  return process.env.DB_HOST ? postgresRepository() : memoryRepository();
+  return (process.env.DB_HOST || process.env.INSTANCE_CONNECTION_NAME) ? postgresRepository() : memoryRepository();
 }

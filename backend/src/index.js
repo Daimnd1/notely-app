@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import { createRepository } from './repository.js';
@@ -22,6 +23,19 @@ app.use(cors({
   exposedHeaders: ['X-Served-By'],
 }));
 app.use(express.json());
+
+// Classroom shared credential only. A real product needs users and note ownership.
+const expectedToken = process.env.AUTH_TOKEN;
+if (process.env.REQUIRE_AUTH === 'true' && !expectedToken) throw new Error('Missing AUTH_TOKEN');
+app.use('/api', (req, res, next) => {
+  if (!expectedToken) return next();
+  const actual = Buffer.from(req.headers.authorization || '');
+  const expected = Buffer.from(`Bearer ${expectedToken}`);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected))
+    return res.status(401).json({ error: 'A valid demo access token is required' });
+  res.set('Cache-Control', 'private, no-store');
+  next();
+});
 
 // Exercise 4: multipart uploads kept in memory (max 10 MB, PDF only) and
 // forwarded to Cloud Storage. Nothing is written to the container's disk.
