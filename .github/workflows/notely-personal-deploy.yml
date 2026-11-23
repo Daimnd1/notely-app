@@ -1,0 +1,72 @@
+name: Notely personal deploy
+on:
+  # Expose the manual Run workflow button.
+  workflow_dispatch:
+# Limit repository access and allow a short-lived identity token.
+permissions:
+  contents: read
+  id-token: write
+# Run only one deployment at a time.
+concurrency:
+  group: notely-personal-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    # Deploy only the learner branch.
+    if: github.ref == 'refs/heads/dev'
+    # Use a temporary GitHub-hosted Linux machine.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Read public deployment identifiers from repository variables.
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+    steps:
+      # Download the selected source commit.
+      - uses: actions/checkout@v4
+      # Authenticate to Google Cloud without a permanent key.
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      # Install and configure the Google Cloud command-line tools.
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Build and push commit-tagged images
+        shell: bash
+        run: |
+          # Stop the workflow on failed commands, unset variables or pipe errors.
+          set -euo pipefail
+          # Construct the regional image repository address.
+          REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/notely"
+          # Let Docker authenticate to this Artifact Registry hostname.
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          # Build a Linux container image from this component and tag it.
+          docker build --platform linux/amd64 -t "${REGISTRY}/api:${GITHUB_SHA}" backend
+          # Build a Linux container image from this component and tag it.
+          docker build --platform linux/amd64 -t "${REGISTRY}/web:${GITHUB_SHA}" frontend
+          # Upload the tagged image to Artifact Registry.
+          docker push "${REGISTRY}/api:${GITHUB_SHA}"
+          # Upload the tagged image to Artifact Registry.
+          docker push "${REGISTRY}/web:${GITHUB_SHA}"
+      - name: Update existing services and check health
+        shell: bash
+        run: |
+          # Stop the workflow on failed commands, unset variables or pipe errors.
+          set -euo pipefail
+          # Construct the regional image repository address.
+          REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/notely"
+          # Update the API settings listed below, keeping other settings.
+          gcloud run services update notely-api --project="$PROJECT_ID" --region="$REGION" \
+            --image="${REGISTRY}/api:${GITHUB_SHA}" --quiet
+          # Update the frontend image while keeping its configuration.
+          gcloud run services update notely-web --project="$PROJECT_ID" --region="$REGION" \
+            --image="${REGISTRY}/web:${GITHUB_SHA}" --quiet
+          # Look up the backend Cloud Run HTTPS address.
+          API_URL=$(gcloud run services describe notely-api --project="$PROJECT_ID" --region="$REGION" --format='value(status.url)')
+          # Look up the frontend Cloud Run HTTPS address.
+          WEB_URL=$(gcloud run services describe notely-web --project="$PROJECT_ID" --region="$REGION" --format='value(status.url)')
+          # Request this URL and report failure for an HTTP error.
+          curl --fail --retry 5 --retry-delay 5 --retry-all-errors --max-time 30 "${API_URL}/health"
+          # Request this URL and report failure for an HTTP error.
+          curl --fail --retry 5 --retry-delay 5 --retry-all-errors --max-time 30 "$WEB_URL/" >/dev/null

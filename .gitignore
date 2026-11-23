@@ -24,3 +24,4 @@ Thumbs.db
 service-account*.json
 terraform.tfvars
 .env.deploy
+gha-creds-*.json
